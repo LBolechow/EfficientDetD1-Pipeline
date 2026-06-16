@@ -25,21 +25,19 @@ The implementation is structured to be reproducible, scalable, and suitable for 
 ## Project Structure
 
 ```
-project_root/
-│
+Efficient-Det-Model/
+├── train.py
 ├── annotations/
-│   ├── instances_Train.json
-│   └── instances_Validation.json
-│
 ├── images/
-│   ├── Train/
-│   └── Validation/
-│
-├── effdet_best.pth
-├── effdet_last.pth
-├── effdet_last_checkpoint.pth
-├── training_results_effdet.csv
-└── train.py
+└── configs/
+    ├── effdet_d1.yaml  
+└── src/
+    ├── __init__.py
+    ├── config.py
+    ├── dataset.py
+    ├── evaluator.py
+    ├── trainer.py
+    └── utils.py
 ```
 
 ---
