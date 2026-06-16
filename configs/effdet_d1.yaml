@@ -1,0 +1,31 @@
+model:
+  name: tf_efficientdet_d1
+  pretrained: true
+  image_size: 640
+
+training:
+  batch_size: 8
+  accumulation_steps: 2
+  epochs: 200
+  learning_rate: 5.0e-4
+  weight_decay: 1.0e-4
+  grad_clip_norm: 5.0
+  patience: 50
+  seed: 42
+  resume: true
+
+paths:
+  annotations_dir: annotations
+  images_dir: images
+  train_images: Train
+  val_images: Validation
+  train_json: instances_Train.json
+  val_json: instances_Validation.json
+  output_best: effdet_best.pth
+  output_last: effdet_last.pth
+  checkpoint: effdet_last_checkpoint.pth
+  csv_log: training_results_effdet.csv
+
+dataloader:
+  num_workers: 4
+  pin_memory: true
