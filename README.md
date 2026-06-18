@@ -1,196 +1,127 @@
-# EfficientDet Training Pipeline
+# LEGO Brick Detection with EfficientDet D1
 
-## Overview
+Part of a broader comparative study on CNN vs. Transformer-based object detection architectures. This repo contains the EfficientDet D1 training pipeline used in the experiment, built from scratch with a custom data pipeline, COCO-format evaluation, and full training state checkpointing.
 
-This repository provides a complete training and evaluation pipeline for object detection using the EfficientDet architecture implemented via the `effdet` library. The workflow is designed for COCO-format datasets and includes support for mixed precision training, gradient accumulation, checkpointing, and detailed evaluation using COCO metrics.
+## The Study
 
-The implementation is structured to be reproducible, scalable, and suitable for experimentation as well as production-level training.
+The goal was to find the best model for a real-world LEGO brick detection application, comparing five architectures across two major design philosophies:
 
----
+**CNN-based:** Faster R-CNN (ResNet-50), EfficientDet D1, YOLOv8s
 
-## Features
+**Transformer-based:** RT-DETR-L, Deformable DETR
 
-* Training using EfficientDet (D1 backbone by default)
-* Full COCO-format dataset support
-* Automatic mixed precision (AMP)
-* Gradient accumulation
-* Cosine annealing learning rate scheduler
-* Early stopping based on validation mAP
-* Resume training from checkpoint
-* COCO evaluation metrics (mAP, AR)
-* CSV logging of training progress
+All models were trained on a custom synthetic dataset generated in BrickPoint Studio 2.0, annotated in CVAT, and evaluated under identical conditions on an NVIDIA RTX 4060 (8GB VRAM).
 
----
+## Dataset
+
+600 synthetic images generated in Studio 2.0, each containing all 10 brick classes. 6000 annotated instances total.
+
+**10 brick classes across two groups:**
+
+Geometrically similar (the hard ones): `2x2`, `2x3`, `1x1`, `1x2`, `1x3`, `2x2corner`, `1x1round`, `1x1curved`
+
+Unique shapes: `2x2roundtile`, `panel1x2x1`
+
+Each scene was randomized across brick placement, orientation, color, background, camera angle, lighting type/direction, and surface wear simulation. Images are 640x480px, exported in COCO 1.0 format.
+
+The dataset was split into four size variants (100 / 200 / 400 / 600 images) to measure how each architecture scales with data volume.
+
+## Results
+
+### Validation set (best checkpoint per dataset size)
+
+| Model | mAP@50 | mAP@50-95 | Train time (600 imgs) |
+|---|---|---|---|
+| RT-DETR-L | 0.946 | **0.885** | 898s |
+| YOLOv8s | 0.949 | 0.873 | **188s** |
+| EfficientDet D1 | 0.951 | 0.848 | 1218s |
+| Deformable DETR | 0.923 | 0.815 | 3023s |
+| Faster R-CNN | 0.891 | 0.767 | 1508s |
+
+### Test set (600 images, harder scenes)
+
+| Model | mAP@50 | mAP@50-95 | Inference [ms/img] |
+|---|---|---|---|
+| Deformable DETR | - | **0.566** | 79.2 |
+| RT-DETR-L | 0.717 | 0.653 | 21.2 |
+| YOLOv8s | 0.690 | 0.607 | **8.8** |
+| EfficientDet D1 | 0.655 | 0.555 | 29.7 |
+| Faster R-CNN | 0.556 | 0.446 | 33.1 |
+
+The gap between validation and test results is intentional: the test set contained significantly harder scenes (overlapping bricks, unknown brick types, varied visual conditions). Deformable DETR, which appeared unimpressive on validation, generalized best to the hard test set, though at the cost of a 79ms inference time that makes it impractical for real-time use.
+
+EfficientDet D1 showed a notable gap between its validation performance and test set generalization, which was the main finding for this architecture.
 
 ## Project Structure
 
 ```
-Efficient-Det-Model/
-├── train.py
-├── annotations/
-├── images/
-└── configs/
-    ├── effdet_d1.yaml  
+.
+├── train.py                  # entry point
+├── configs/
+│   └── effdet_d1.yaml        # all hyperparameters here
 └── src/
-    ├── __init__.py
-    ├── config.py
-    ├── dataset.py
-    ├── evaluator.py
-    ├── trainer.py
-    └── utils.py
+    ├── config.py             # dataclasses loading the YAML
+    ├── dataset.py            # LegoDataset + albumentations pipeline
+    ├── evaluator.py          # COCO eval, prediction collection, rescaling
+    ├── trainer.py            # Trainer, EarlyStopping, CheckpointManager, CsvLogger
+    └── utils.py              # seed, collate_fn, batch padding
 ```
 
----
-
-## Requirements
-
-Install dependencies before running the training:
+## Setup
 
 ```bash
-pip install torch torchvision
-pip install opencv-python
-pip install numpy
-pip install albumentations
-pip install pycocotools
-pip install effdet
+pip install torch torchvision effdet pycocotools albumentations opencv-python pyyaml
 ```
 
----
+Dataset structure expected:
 
-## Dataset Format
-
-The dataset must follow the COCO annotation format.
-
-### Images
-
-* Training images: `images/Train/`
-* Validation images: `images/Validation/`
-
-### Annotations
-
-* Training annotations: `annotations/instances_Train.json`
-* Validation annotations: `annotations/instances_Validation.json`
-
-Each annotation file must include:
-
-* `images`
-* `annotations`
-* `categories`
-
-Bounding boxes are expected in COCO format: `[x, y, width, height]`.
-
----
-
-## Configuration
-
-All configuration parameters are defined in the `Config` class:
-
-* `IMG_SIZE` – input image resolution
-* `BATCH_SIZE` – batch size per iteration
-* `ACCUMULATION_STEPS` – gradient accumulation steps
-* `EPOCHS` – total number of epochs
-* `LR` – learning rate
-* `PATIENCE` – early stopping patience
-* `DEVICE` – training device (CPU/GPU)
-
-Paths for datasets, checkpoints, and logs are also defined in this class.
-
----
+```
+.
+├── annotations/
+│   ├── instances_Train.json
+│   └── instances_Validation.json
+└── images/
+    ├── Train/
+    └── Validation/
+```
 
 ## Training
-
-To start training:
 
 ```bash
 python train.py
 ```
 
-### Training Behavior
+Resumes automatically from `effdet_last_checkpoint.pth` if it exists. To start fresh, set `resume: false` in the config or delete the checkpoint.
 
-* Model: EfficientDet-D1 initialized with pretrained weights
-* Optimizer: AdamW
-* Scheduler: CosineAnnealingLR
-* Loss scaling via AMP when CUDA is available
-* Gradient clipping applied to stabilize training
+Key config options in `configs/effdet_d1.yaml`:
 
----
-
-## Evaluation
-
-Evaluation is performed at the end of each epoch using COCO metrics.
-
-Metrics include:
-
-* mAP (IoU 0.50:0.95)
-* mAP (IoU 0.50)
-* mAP (IoU 0.75)
-* mAP for small, medium, large objects
-* Average Recall (AR) at different detection limits
-
----
-
-## Checkpointing
-
-The training process automatically saves:
-
-* `effdet_best.pth` – best model based on mAP
-* `effdet_last.pth` – last epoch model
-* `effdet_last_checkpoint.pth` – full training state
-
-If `RESUME_TRAINING = True`, training resumes from the last checkpoint.
-
----
-
-## Logging
-
-Training progress is stored in:
-
-```
-training_results_effdet.csv
+```yaml
+training:
+  batch_size: 8
+  accumulation_steps: 2   # effective batch = 16
+  epochs: 200
+  learning_rate: 5.0e-4
+  patience: 50
 ```
 
-Each row contains:
+## Training Setup
 
-* Epoch
-* Training loss
-* Validation loss
-* Learning rate
-* Epoch duration
-* COCO evaluation metrics
+- Optimizer: AdamW
+- Scheduler: CosineAnnealingLR
+- AMP (automatic mixed precision) when CUDA is available
+- Gradient accumulation (effective batch size 16)
+- Gradient clipping (max norm 5.0)
+- Early stopping on mAP@50-95
+- Full training state checkpointing (model, optimizer, scheduler, scaler, early stopping counter)
+- Per-epoch CSV logging with all COCO metrics
 
----
+## Environment
 
-## Early Stopping
+- WSL2 / Ubuntu 22.04
+- CUDA 12.8 + cuDNN (deterministic mode)
+- NVIDIA RTX 4060 8GB
+- PyTorch with AMP
 
-Training stops automatically when no improvement in mAP is observed for a number of epochs defined by `PATIENCE`.
+## Other Models from the Study
 
----
-
-## Reproducibility
-
-A fixed random seed is used to ensure reproducible results across runs. This includes:
-
-* Python random
-* NumPy
-* PyTorch (CPU and CUDA)
-
----
-
-## Notes
-
-* Input images are resized while preserving aspect ratio and padded to a square resolution.
-* Bounding boxes are converted internally to match EfficientDet expectations.
-* Empty annotations are handled safely during both training and evaluation.
-
----
-
-## License
-
-This project does not include a license by default. Add an appropriate license file if distribution is intended.
-
----
-
-## Acknowledgments
-
-* EfficientDet implementation provided by the `effdet` library
-* COCO evaluation tools via `pycocotools`
+The remaining four architectures (YOLOv8s, RT-DETR-L, Faster R-CNN, Deformable DETR) were implemented separately and are not included in this repository.
