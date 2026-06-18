@@ -42,7 +42,7 @@ The dataset was split into four size variants (100 / 200 / 400 / 600 images) to 
 
 | Model | mAP@50 | mAP@50-95 | Inference [ms/img] |
 |---|---|---|---|
-| Deformable DETR | - | **0.566** | 79.2 |
+| Deformable DETR | 0.664 | **0.566** | 79.2 |
 | RT-DETR-L | 0.717 | 0.653 | 21.2 |
 | YOLOv8s | 0.690 | 0.607 | **8.8** |
 | EfficientDet D1 | 0.655 | 0.555 | 29.7 |
