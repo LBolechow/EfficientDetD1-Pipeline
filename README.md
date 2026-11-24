@@ -69,8 +69,8 @@ These are results for the tested model configurations on this synthetic dataset,
 │   └── effdet_d1.yaml        # training configuration
 └── src/
     ├── config.py             # load YAML configuration
-    ├── dataset.py            # LegoDataset and augmentations
-    ├── evaluator.py          # predictions, rescaling, COCO evaluation
+    ├── dataset.py            # COCO dataset, resize/pad, normalization, box conversion
+    ├── evaluator.py          # box rescaling to source images, COCO evaluation
     ├── trainer.py            # training, early stopping, checkpoints
     └── utils.py              # seeds, collate function, batch padding
 ```
@@ -116,12 +116,14 @@ training:
 
 ### Training Features
 
-- AdamW optimizer and CosineAnnealingLR scheduler
+- Pretrained `tf_efficientdet_d1` model using `DetBenchTrain` and `DetBenchPredict` from `effdet`
+- AdamW optimizer and `CosineAnnealingLR` scheduler
 - Automatic mixed precision (AMP) when CUDA is available
 - Gradient accumulation (effective batch size 16)
 - Gradient clipping (maximum norm 5.0)
+- `LongestMaxSize` resize and square padding to 640 × 640, with ImageNet normalization; bounding-box conversion from COCO to model coordinates and back
 - Early stopping based on validation mAP@50–95
-- Checkpointing of model and training state
+- Separate best/last model weights and resumable checkpoints (epoch, model, optimizer, scheduler, AMP scaler, early-stopping state)
 - COCO-style evaluation and per-epoch CSV metric logging
 
 ## Environment
@@ -130,7 +132,7 @@ training:
 - NVIDIA RTX 4060 8 GB
 - PyTorch with CUDA and AMP
 
-Exact dependency and CUDA versions should match the installation used to run the repository.
+The training configuration also sets seed `42` and deterministic cuDNN behavior. The exact CUDA and package versions depend on the local environment used to run the project.
 
 ## Other Models from the Study
 
